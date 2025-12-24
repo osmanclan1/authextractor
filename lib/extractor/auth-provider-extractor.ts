@@ -44,7 +44,9 @@ export function extractAuthProvider(repoPath: string): {
   return {
     type: 'unknown',
     name: 'Unknown',
-    configuration: {},
+    configuration: {
+      providers: []
+    },
     implementation: {
       filePath: '',
       template: '',
