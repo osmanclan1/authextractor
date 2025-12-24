@@ -80,7 +80,7 @@ export function extractPermissionChecks(repoPath: string): {
 
 function extractMiddlewarePattern(content: string, filePath: string, repoPath: string): MiddlewarePattern | null {
   // Look for middleware function
-  const middlewareMatch = content.match(/(?:export\s+)?(?:async\s+)?(?:function\s+)?middleware\s*\([^)]*\)\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s)
+  const middlewareMatch = content.match(/(?:export\s+)?(?:async\s+)?(?:function\s+)?middleware\s*\([^)]*\)\s*\{([\s\S]*?)\}/)
   if (!middlewareMatch) {
     return null
   }

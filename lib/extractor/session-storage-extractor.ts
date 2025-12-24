@@ -3,7 +3,7 @@ import { glob } from 'glob'
 import type { SessionStorageConfig, SessionLifetime, SessionStorageImplementation } from './types'
 
 export function extractSessionStorage(repoPath: string): {
-  strategy: string
+  strategy: 'jwt' | 'database' | 'cookie' | 'localStorage' | 'hybrid'
   configuration: SessionStorageConfig
   lifetime: SessionLifetime
   implementation: SessionStorageImplementation
@@ -50,7 +50,7 @@ export function extractSessionStorage(repoPath: string): {
 
   // Default to JWT
   return {
-    strategy: 'jwt',
+    strategy: 'jwt' as const,
     configuration: {
       type: 'jwt',
       httpOnly: true,
@@ -80,7 +80,7 @@ function extractJWTStrategy(content: string, filePath: string, repoPath: string)
   const sameSite = content.match(/sameSite:\s*["'](\w+)["']/)?.[1] || 'lax'
 
   return {
-    strategy: 'jwt',
+    strategy: 'jwt' as const,
     configuration: {
       type: 'jwt',
       httpOnly,
@@ -101,7 +101,7 @@ function extractJWTStrategy(content: string, filePath: string, repoPath: string)
 
 function extractDatabaseStrategy(content: string, filePath: string, repoPath: string) {
   return {
-    strategy: 'database',
+    strategy: 'database' as const,
     configuration: {
       type: 'database',
       adapter: content.includes('MongoDBAdapter') ? 'mongodb' : 
@@ -131,7 +131,7 @@ function extractCookieStorage(filePath: string, repoPath: string) {
   const sameSite = content.match(/sameSite:\s*["'](\w+)["']/)?.[1] || 'lax'
 
   return {
-    strategy: 'cookie',
+    strategy: 'cookie' as const,
     configuration: {
       type: 'cookie',
       httpOnly,
@@ -155,7 +155,7 @@ function extractLocalStorage(filePath: string, repoPath: string) {
   const content = readFileSync(filePath, 'utf-8')
   
   return {
-    strategy: 'localStorage',
+    strategy: 'localStorage' as const,
     configuration: {
       type: 'localStorage'
     },
@@ -173,7 +173,7 @@ function extractLocalStorage(filePath: string, repoPath: string) {
 
 function extractSessionTemplate(content: string): string {
   // Try to extract session callback
-  const sessionMatch = content.match(/session:\s*async?\s*\([^)]*\)\s*=>\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s)
+  const sessionMatch = content.match(/session:\s*async?\s*\([^)]*\)\s*=>\s*\{([\s\S]*?)\}/)
   if (sessionMatch) {
     return sessionMatch[1].trim()
   }

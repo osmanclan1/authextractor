@@ -80,7 +80,7 @@ export function extractTokenStrategy(repoPath: string): {
       implementation = {
         filePath: file.replace(repoPath, ''),
         template: content.substring(0, 1000),
-        refreshLogic: extractRefreshLogic(content)
+        refreshLogic: extractRefreshLogic(content) || undefined
       }
     }
   }
@@ -163,14 +163,14 @@ function extractRefreshStrategy(content: string, filePath: string, repoPath: str
 
 function extractRefreshLogic(content: string): string | null {
   // Try to extract refresh function
-  const refreshFunctionPattern = /(?:async\s+)?(?:function\s+)?refresh[^{]*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
+  const refreshFunctionPattern = /(?:async\s+)?(?:function\s+)?refresh[^{]*\{([\s\S]*?)\}/
   const match = content.match(refreshFunctionPattern)
   if (match) {
     return match[1].trim()
   }
 
   // Try to extract refresh logic from useEffect or similar
-  const useEffectPattern = /useEffect\s*\([^)]*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
+  const useEffectPattern = /useEffect\s*\([^)]*\{([\s\S]*?)\}/
   const useEffectMatch = content.match(useEffectPattern)
   if (useEffectMatch && useEffectMatch[1].includes('refresh')) {
     return useEffectMatch[1].trim()

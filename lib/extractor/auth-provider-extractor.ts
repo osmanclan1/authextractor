@@ -4,7 +4,7 @@ import { glob } from 'glob'
 import type { AuthProviderConfig, AuthProviderImplementation, CallbackPattern } from './types'
 
 export function extractAuthProvider(repoPath: string): {
-  type: string
+  type: 'next-auth' | 'firebase' | 'cognito' | 'custom' | 'oauth' | 'magic-link' | 'unknown'
   name: string
   configuration: AuthProviderConfig
   implementation: AuthProviderImplementation
@@ -42,7 +42,7 @@ export function extractAuthProvider(repoPath: string): {
 
   // Default to unknown
   return {
-    type: 'unknown',
+    type: 'unknown' as const,
     name: 'Unknown',
     configuration: {
       providers: []
@@ -56,7 +56,13 @@ export function extractAuthProvider(repoPath: string): {
   }
 }
 
-function extractNextAuth(filePath: string, repoPath: string) {
+function extractNextAuth(filePath: string, repoPath: string): {
+  type: 'next-auth'
+  name: string
+  configuration: AuthProviderConfig
+  implementation: AuthProviderImplementation
+  callbacks: CallbackPattern[]
+} {
   const content = readFileSync(filePath, 'utf-8')
   
   // Extract providers
@@ -87,7 +93,7 @@ function extractNextAuth(filePath: string, repoPath: string) {
   const template = extractCodeBlock(content, 'authOptions', 'export')
 
   return {
-    type: 'next-auth',
+    type: 'next-auth' as const,
     name: 'NextAuth.js',
     configuration: {
       providers,
@@ -110,11 +116,16 @@ const { data: session, status } = useSession()`
   }
 }
 
-function extractFirebaseAuth(filePath: string, repoPath: string) {
+function extractFirebaseAuth(filePath: string, repoPath: string): {
+  type: 'firebase'
+  name: string
+  configuration: AuthProviderConfig
+  implementation: AuthProviderImplementation
+} {
   const content = readFileSync(filePath, 'utf-8')
   
   return {
-    type: 'firebase',
+    type: 'firebase' as const,
     name: 'Firebase Authentication',
     configuration: {
       providers: ['firebase'],
@@ -135,11 +146,16 @@ import { auth } from "@/libs/firebase"`
   }
 }
 
-function extractCognito(filePath: string, repoPath: string) {
+function extractCognito(filePath: string, repoPath: string): {
+  type: 'cognito'
+  name: string
+  configuration: AuthProviderConfig
+  implementation: AuthProviderImplementation
+} {
   const content = readFileSync(filePath, 'utf-8')
   
   return {
-    type: 'cognito',
+    type: 'cognito' as const,
     name: 'AWS Cognito',
     configuration: {
       providers: ['cognito'],

@@ -70,7 +70,7 @@ function extractRoles(content: string): RoleDefinition[] {
   const roles: RoleDefinition[] = []
   
   // Look for role arrays or objects
-  const roleArrayPattern = /(?:const|let|var)\s+roles?\s*=\s*\[([^\]]+)\]/s
+  const roleArrayPattern = /(?:const|let|var)\s+roles?\s*=\s*\[([\s\S]*?)\]/
   const roleArrayMatch = content.match(roleArrayPattern)
   if (roleArrayMatch) {
     const roleStrings = roleArrayMatch[1].split(',').map(s => s.trim().replace(/["']/g, ''))
@@ -85,7 +85,7 @@ function extractRoles(content: string): RoleDefinition[] {
   }
 
   // Look for role objects
-  const roleObjectPattern = /(?:const|let|var)\s+roles?\s*=\s*\{([^}]+)\}/s
+  const roleObjectPattern = /(?:const|let|var)\s+roles?\s*=\s*\{([\s\S]*?)\}/
   const roleObjectMatch = content.match(roleObjectPattern)
   if (roleObjectMatch) {
     const roleEntries = roleObjectMatch[1].split(',').map(s => s.trim())
@@ -138,7 +138,7 @@ function extractPermissions(content: string): PermissionDefinition[] {
   const permissions: PermissionDefinition[] = []
   
   // Look for permission arrays
-  const permissionArrayPattern = /(?:const|let|var)\s+permissions?\s*=\s*\[([^\]]+)\]/s
+  const permissionArrayPattern = /(?:const|let|var)\s+permissions?\s*=\s*\[([\s\S]*?)\]/
   const permissionArrayMatch = content.match(permissionArrayPattern)
   if (permissionArrayMatch) {
     const permissionStrings = permissionArrayMatch[1].split(',').map(s => s.trim().replace(/["']/g, ''))
@@ -181,7 +181,7 @@ function extractPermissions(content: string): PermissionDefinition[] {
 
 function extractRoleCheckPattern(content: string): string | null {
   // Look for role check functions
-  const roleCheckPattern = /(?:function|const)\s+\w*[Rr]ole\w*\s*[=\(].*?\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
+  const roleCheckPattern = /(?:function|const)\s+\w*[Rr]ole\w*\s*[=\(][\s\S]*?\{([\s\S]*?)\}/
   const match = content.match(roleCheckPattern)
   if (match) {
     return match[1].trim()
@@ -194,7 +194,7 @@ function extractRoleCheckPattern(content: string): string | null {
   }
 
   // Look for role in conditions
-  const conditionCheck = content.match(/if\s*\([^)]*role[^)]*\)\s*\{([^}]+)\}/s)
+  const conditionCheck = content.match(/if\s*\([^)]*role[^)]*\)\s*\{([\s\S]*?)\}/)
   if (conditionCheck) {
     return conditionCheck[1].trim()
   }
