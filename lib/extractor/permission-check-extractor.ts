@@ -32,13 +32,23 @@ export function extractPermissionChecks(repoPath: string): {
   for (const file of apiRouteFiles) {
     const content = readFileSync(file, 'utf-8')
     
-    // Check if it's a protected route
+    // Check if it's a protected route - expanded patterns
     if (content.includes('authMiddleware') || 
         content.includes('requireAuth') ||
         content.includes('checkAuth') ||
         content.includes('verifyToken') ||
         content.includes('unauthorized') ||
-        content.includes('Unauthorized')) {
+        content.includes('Unauthorized') ||
+        content.includes('cookies.get') && (content.includes('it') || content.includes('idToken') || content.includes('access_token') || content.includes('at')) ||
+        content.includes('status: 401') ||
+        content.includes('status:401') ||
+        content.includes('statusCode: 401') ||
+        content.includes('No authentication token') ||
+        content.includes('Authentication required') ||
+        content.includes('JWT') ||
+        content.includes('jwt') ||
+        content.includes('idToken') ||
+        content.includes('id_token')) {
       
       const apiGuard = extractAPIGuard(content, file, repoPath)
       if (apiGuard) {
@@ -59,14 +69,35 @@ export function extractPermissionChecks(repoPath: string): {
       return content.includes('useAuth') ||
              content.includes('useSession') ||
              content.includes('isAuthenticated') ||
-             content.includes('requireAuth')
+             content.includes('requireAuth') ||
+             content.includes('checkAuth') ||
+             (content.includes('router.push') && (content.includes('signin') || content.includes('login'))) ||
+             (content.includes('useRouter') && content.includes('push'))
     })
 
-  for (const file of componentFiles.slice(0, 10)) { // Limit to first 10 to avoid too many
+  for (const file of componentFiles.slice(0, 20)) { // Increased limit
     const content = readFileSync(file, 'utf-8')
     const componentGuard = extractComponentGuard(content, file, repoPath)
     if (componentGuard) {
       componentGuards.push(componentGuard)
+    }
+  }
+
+  // Find page files with client-side protection
+  const pageFiles = glob.sync('**/app/**/page.{tsx,jsx}', { cwd: repoPath, absolute: true })
+    .concat(glob.sync('**/pages/**/*.{tsx,jsx}', { cwd: repoPath, absolute: true }))
+    .filter(path => {
+      const content = readFileSync(path, 'utf-8')
+      return content.includes('useAuth') ||
+             content.includes('isAuthenticated') ||
+             (content.includes('router') && content.includes('push') && (content.includes('signin') || content.includes('login')))
+    })
+
+  for (const file of pageFiles.slice(0, 10)) {
+    const content = readFileSync(file, 'utf-8')
+    const pageRoute = extractPageRouteProtection(content, file, repoPath)
+    if (pageRoute) {
+      protectedRoutes.push(pageRoute)
     }
   }
 
@@ -103,8 +134,16 @@ function extractMiddlewarePattern(content: string, filePath: string, repoPath: s
 
 function extractAPIGuard(content: string, filePath: string, repoPath: string): APIGuard | null {
   // Extract route path from file path
-  const pathMatch = filePath.match(/api\/([^/]+)\/route/)
-  const endpoint = pathMatch ? `/api/${pathMatch[1]}` : filePath.replace(repoPath, '')
+  const pathMatch = filePath.match(/api\/([^/]+(?:\/[^/]+)*)\/route/)
+  let endpoint = pathMatch ? `/api/${pathMatch[1]}` : filePath.replace(repoPath, '')
+  
+  // Handle nested routes
+  if (!endpoint.startsWith('/api/')) {
+    const apiMatch = filePath.match(/api\/(.+?)(?:\/route|$)/)
+    if (apiMatch) {
+      endpoint = `/api/${apiMatch[1]}`
+    }
+  }
 
   // Extract HTTP method
   const method = content.includes('export async function GET') ? 'GET' :
@@ -113,21 +152,33 @@ function extractAPIGuard(content: string, filePath: string, repoPath: string): A
                  content.includes('export async function PATCH') ? 'PATCH' :
                  content.includes('export async function DELETE') ? 'DELETE' : 'GET'
 
-  // Determine protection type
+  // Determine protection type - expanded detection
   let protection: 'auth' | 'role' | 'permission' | 'custom' = 'auth'
-  if (content.includes('checkRole') || content.includes('role')) {
+  if (content.includes('checkRole') || content.includes('role') || content.includes('admin')) {
     protection = 'role'
   } else if (content.includes('checkPermission') || content.includes('permission')) {
     protection = 'permission'
-  } else if (content.includes('authMiddleware') || content.includes('verifyToken')) {
+  } else if (content.includes('authMiddleware') || 
+             content.includes('verifyToken') ||
+             content.includes('cookies.get') && (content.includes('it') || content.includes('idToken') || content.includes('at')) ||
+             content.includes('No authentication token') ||
+             content.includes('Authentication required') ||
+             content.includes('status: 401')) {
     protection = 'auth'
   } else {
     protection = 'custom'
   }
 
-  // Extract middleware name
+  // Extract middleware name or protection pattern
+  let middleware: string | undefined
   const middlewareMatch = content.match(/(?:const|await)\s+(\w+)\s*=\s*(?:await\s+)?(\w+Middleware|authMiddleware|verifyToken)/)
-  const middleware = middlewareMatch ? middlewareMatch[2] : undefined
+  if (middlewareMatch) {
+    middleware = middlewareMatch[2]
+  } else if (content.includes('cookies.get')) {
+    middleware = 'cookie-based-auth'
+  } else if (content.includes('JWT') || content.includes('jwt')) {
+    middleware = 'jwt-verification'
+  }
 
   return {
     endpoint,
@@ -140,15 +191,23 @@ function extractAPIGuard(content: string, filePath: string, repoPath: string): A
 }
 
 function extractProtectedRoute(content: string, filePath: string, repoPath: string): ProtectedRoute | null {
-  const pathMatch = filePath.match(/api\/([^/]+)\/route/)
-  const path = pathMatch ? `/api/${pathMatch[1]}` : filePath.replace(repoPath, '')
+  const pathMatch = filePath.match(/api\/([^/]+(?:\/[^/]+)*)\/route/)
+  let path = pathMatch ? `/api/${pathMatch[1]}` : filePath.replace(repoPath, '')
+  
+  // Handle nested routes
+  if (!path.startsWith('/api/')) {
+    const apiMatch = filePath.match(/api\/(.+?)(?:\/route|$)/)
+    if (apiMatch) {
+      path = `/api/${apiMatch[1]}`
+    }
+  }
 
-  // Determine protection type
+  // Determine protection type - expanded detection
   let protection: 'auth' | 'role' | 'permission' | 'custom' = 'auth'
   let requiredRole: string | undefined
   let requiredPermission: string | undefined
 
-  if (content.includes('checkRole') || content.includes('role')) {
+  if (content.includes('checkRole') || content.includes('role') || content.includes('admin')) {
     protection = 'role'
     const roleMatch = content.match(/role\s*[=!]==\s*["'](\w+)["']/)
     if (roleMatch) {
@@ -160,7 +219,12 @@ function extractProtectedRoute(content: string, filePath: string, repoPath: stri
     if (permMatch) {
       requiredPermission = permMatch[1]
     }
-  } else if (content.includes('authMiddleware') || content.includes('verifyToken')) {
+  } else if (content.includes('authMiddleware') || 
+             content.includes('verifyToken') ||
+             content.includes('cookies.get') && (content.includes('it') || content.includes('idToken') || content.includes('at')) ||
+             content.includes('No authentication token') ||
+             content.includes('Authentication required') ||
+             content.includes('status: 401')) {
     protection = 'auth'
   } else {
     protection = 'custom'
@@ -180,7 +244,7 @@ function extractComponentGuard(content: string, filePath: string, repoPath: stri
   const componentMatch = content.match(/(?:export\s+)?(?:default\s+)?(?:function|const)\s+(\w+)/)
   const component = componentMatch ? componentMatch[1] : 'Component'
 
-  // Determine protection type
+  // Determine protection type - expanded detection
   let protection: 'auth' | 'role' | 'permission' = 'auth'
   let requiredRole: string | undefined
   let requiredPermission: string | undefined
@@ -197,7 +261,10 @@ function extractComponentGuard(content: string, filePath: string, repoPath: stri
     if (permMatch) {
       requiredPermission = permMatch[1]
     }
-  } else {
+  } else if (content.includes('useAuth') || 
+             content.includes('isAuthenticated') ||
+             content.includes('checkAuth') ||
+             (content.includes('router') && content.includes('push') && (content.includes('signin') || content.includes('login')))) {
     protection = 'auth'
   }
 
@@ -208,6 +275,57 @@ function extractComponentGuard(content: string, filePath: string, repoPath: stri
     requiredPermission,
     filePath: filePath.replace(repoPath, ''),
     template: content.substring(0, 500)
+  }
+}
+
+function extractPageRouteProtection(content: string, filePath: string, repoPath: string): ProtectedRoute | null {
+  // Extract route path from file path
+  let path = filePath.replace(repoPath, '')
+  
+  // Convert file path to route path
+  if (path.includes('/app/')) {
+    const appMatch = path.match(/app\/(.+?)(?:\/page|$)/)
+    if (appMatch) {
+      path = `/${appMatch[1]}`
+    }
+  } else if (path.includes('/pages/')) {
+    const pagesMatch = path.match(/pages\/(.+?)(?:\/index|$)/)
+    if (pagesMatch) {
+      path = `/${pagesMatch[1]}`
+    }
+  }
+
+  // Determine protection type
+  let protection: 'auth' | 'role' | 'permission' | 'custom' = 'auth'
+  let requiredRole: string | undefined
+  let requiredPermission: string | undefined
+
+  if (content.includes('useAuth') || 
+      content.includes('isAuthenticated') ||
+      (content.includes('router') && content.includes('push') && (content.includes('signin') || content.includes('login')))) {
+    protection = 'auth'
+  } else if (content.includes('role')) {
+    protection = 'role'
+    const roleMatch = content.match(/role\s*[=!]==\s*["'](\w+)["']/)
+    if (roleMatch) {
+      requiredRole = roleMatch[1]
+    }
+  } else if (content.includes('permission')) {
+    protection = 'permission'
+    const permMatch = content.match(/permission\s*[=!]==\s*["'](\w+)["']/)
+    if (permMatch) {
+      requiredPermission = permMatch[1]
+    }
+  } else {
+    protection = 'custom'
+  }
+
+  return {
+    path,
+    protection,
+    requiredRole,
+    requiredPermission,
+    implementation: content.substring(0, 500)
   }
 }
 
